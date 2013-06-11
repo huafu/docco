@@ -168,17 +168,36 @@ and rendering it to the specified output path.
     write = (source, sections, config) ->
 
       destination = (file) ->
-        path.join(config.output, path.basename(file, path.extname(file)) + '.html')
+        subPath = file.substr(config.basePath.length)
+        ###
+        pathToCreate = subPath.split path.sep
+        pathToCreate.pop()
+        currentPath = config.output
+        for part in pathToCreate
+          currentPath = path.join currentPath, part
+          fs.mkdirSync(currentPath) unless fs.existsSync(currentPath)
+        ###
+        subPath = subPath.substr 0, subPath.length - path.extname(file).length
+        subPath = subPath.replace new RegExp("\\#{path.sep}"), '--'
+        path.join(config.output, "#{subPath}.html")
+
+
 
 The **title** of the file is either the first heading in the prose, or the
 name of the source file.
 
-      first = marked.lexer(sections[0].docsText)[0]
-      hasTitle = first and first.type is 'heading' and first.depth is 1
-      title = if hasTitle then first.text else path.basename source
+      fileLabel = (file) ->
+        file.substr(config.basePath.length)
+        ###
+        first = marked.lexer(sections[0].docsText)[0]
+        hasTitle = first and first.type is 'heading' and first.depth is 1
+        title = if hasTitle then first.text else path.basename source
+        ###
 
+      title = fileLabel source
+      hasTitle = no
       html = config.template {sources: config.sources, css: path.basename(config.css),
-        title, hasTitle, sections, path, destination,}
+        title, hasTitle, sections, path, destination, fileLabel}
 
       console.log "docco: #{source} -> #{destination source}"
       fs.writeFileSync destination(source), html
@@ -218,6 +237,9 @@ source files for languages for which we have definitions.
         console.warn "docco: skipped unknown type (#{path.basename source})" unless lang
         lang
       ).sort()
+
+      config.basePath = fs.realpathSync(options.basePath or process.cwd())
+      config.basePath = "#{config.basePath}#{path.sep}" unless config.basePath.match new RegExp("\\#{path.sep}$")
 
       config
 
